@@ -1,0 +1,5 @@
+daily_url_common:https://eodhistoricaldata.com/api/eod/
+intraday_url_common:https://eodhistoricaldata.com/api/intraday/
+start_date:2012-01-01
+end_date:2022-03-31
+api_token:61fd9ca3cc2b58.77202970

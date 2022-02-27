@@ -37,7 +37,7 @@ int CreatePairTable(sqlite3* db) {
 		+ "symbol1 CHAR(20) NOT NULL,"
 		+ "symbol2 CHAR(20) NOT NULL,"
 		+ "volatility REAL NOT NULL,"
-		+ "profit_loss REAL NOT NULL,"
+		+ "profit_loss REAL ,"
 		+ "PRIMARY KEY(symbol1, symbol2)"
 		+ ");";
 	if (ExecuteSQL(db, sql_CreateTable_StockPairs.c_str()) == -1) return -1;
@@ -97,7 +97,7 @@ int CreatePairPricesTable(sqlite3* db)
 		+ "close1 REAL NOT NULL, "
 		+ "open2 REAL NOT NULL, "
 		+ "close2 REAL NOT NULL, "
-		+ "profit_loss REAL NOT NULL, "
+		+ "profit_loss REAL, "
 		+ "PRIMARY KEY(symbol1, symbol2, date), "
 		+ "FOREIGN KEY(symbol1, date) REFERENCES PairOnePrices(symbol, date) "
 		+ "ON DELETE CASCADE ON UPDATE CASCADE,\n"
@@ -166,7 +166,7 @@ int BackTest(sqlite3* db, float k)
 		+ "(symbol1 CHAR(20) NOT NULL, "
 		+ "symbol2 CHAR(20) NOT NULL, "
 		+ "date CHAR(20) NOT NULL, "
-		+ "profit_loss REAL NOT NULL, "
+		+ "profit_loss REAL, "
 		+ "PRIMARY KEY(symbol1, symbol2, date), "
 		+ "FOREIGN KEY(symbol1, symbol2, date) REFERENCES PairPrices(symbol1, symbol2, date) "
 		+ "ON DELETE CASCADE ON UPDATE CASCADE\n"
@@ -181,7 +181,7 @@ int BackTest(sqlite3* db, float k)
 		+ "else 0 end as profit "
 		+ "from PairPrices a join PairPrices b on julianday(a.date) - julianday(b.date)=1 "
 		+ "and a.date>='2022-01-01' and a.symbol1=b.symbol1 and a.symbol2=b.symbol2 "
-		+ "left join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2;";
+		+ "join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2;";
 
 		
 	    string sql_Update_PairPrices = string("Update PairPrices set profit_loss = ")
@@ -204,10 +204,10 @@ int BackTest2(sqlite3* db, float k);
 int Update_Profitloss(sqlite3* db)
 {
 	string sql_Update_StockPairs = string("Update StockPairs SET profit_loss = ")
-		+ "(select sum(profit_loss) as profit_loss"
-		+ "from PairPrices"
-		+ "where StockPairs.symbol1=PairPrices.symbol1"
-		+ "and StockPairs.symbol2=PairPrices.symbol2"
+		+ "(select sum(profit_loss) as profit_loss "
+		+ "from PairPrices "
+		+ "where StockPairs.symbol1=PairPrices.symbol1 "
+		+ "and StockPairs.symbol2=PairPrices.symbol2 "
 		+ "group by PairPrices.symbol1, PairPrices.symbol2);"
 		;
 
@@ -298,7 +298,7 @@ int BackTest2(sqlite3* db, float k)
 		+ "(symbol1 CHAR(20) NOT NULL, "
 		+ "symbol2 CHAR(20) NOT NULL, "
 		+ "date CHAR(20) NOT NULL, "
-		+ "profit_loss REAL NOT NULL, "
+		+ "profit_loss REAL, "
 		+ "PRIMARY KEY(symbol1, symbol2, date), "
 		+ "FOREIGN KEY(symbol1, symbol2, date) REFERENCES PairPrices(symbol1, symbol2, date) "
 		+ "ON DELETE CASCADE ON UPDATE CASCADE"
@@ -311,9 +311,9 @@ int BackTest2(sqlite3* db, float k)
 		+ "when b.close1/b.close2 - a.open1/a.open2<-volatility*" + kstr + " "
 		+ "then (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
 		+ "else 0 end as profit "
-		+ "from PairPrices a left join PairPrices b on julianday(a.date) - julianday(b.date)=1 "
+		+ "from PairPrices a join PairPrices b on julianday(a.date) - julianday(b.date)=1 "
 		+ "and a.date>='2022-01-01' and a.symbol1=b.symbol1 and a.symbol2=b.symbol2 "
-		+ "left join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2;";
+		+ "join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2;";
 
 
 	string sql_Update_PairPrices = string("Update PairPrices set profit_loss = ")

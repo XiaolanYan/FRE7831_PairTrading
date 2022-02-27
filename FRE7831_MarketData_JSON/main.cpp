@@ -118,8 +118,8 @@ int PopulatePairPrices(sqlite3* db)
 	string sql_insert = string("INSERT INTO PairPrices ")
 		+ "SELECT StockPairs.symbol1 as symbol1, StockPairs.symbol2 as symbol2, "
 		+ "PairOnePrices.date as date, "
-		+ "PairOnePrices.open as open1, PairOnePrices.close as close1, "
-		+ "PairTwoPrices.open as open2, PairTwoPrices.close as close2, "
+		+ "round(PairOnePrices.open,2) as open1, round(PairOnePrices.close,2) as close1, "
+		+ "round(PairTwoPrices.open,2) as open2, round(PairTwoPrices.close,2) as close2, "
 		+ "0 as profit_loss "
 		+ "FROM StockPairs, PairOnePrices, PairTwoPrices "
 		+ "WHERE (((StockPairs.symbol1 = PairOnePrices.symbol) AND "
@@ -172,31 +172,42 @@ int BackTest(sqlite3* db, float k)
 		+ "ON DELETE CASCADE ON UPDATE CASCADE\n"
 		+ ");";
 
-	    string sql_Insert_Trade = string("insert into Trade ")
+	string sql_Temp_PairPrices_Table = string("Create table if not exists Temp_Pairprices as ")
+		+ "select *, rank()over(partition by symbol1, symbol2 order by date) as rank "
+		+ "from PairPrices WHERE date>='2022-01-01';";
+
+	string sql_Insert_Trade = string("insert into Trade ")
 		+ "select a.symbol1, a.symbol2, a.date as `date`,"
 		+ "case when abs(b.close1/b.close2 - a.open1/a.open2)>volatility*" + kstr + " "
-		+ "then - (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
-		+ "when abs(b.close1/b.close2 - a.open1/a.open2)<volatility*" + kstr + " "
 		+ "then (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
+		+ "when abs(b.close1/b.close2 - a.open1/a.open2)<volatility*" + kstr + " "
+		+ "then -(10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
 		+ "else 0 end as profit "
-		+ "from PairPrices a join PairPrices b on julianday(a.date) - julianday(b.date)=1 "
-		+ "and a.date>='2022-01-01' and a.symbol1=b.symbol1 and a.symbol2=b.symbol2 "
+		+ "from Temp_Pairprices a join Temp_Pairprices b on (a.rank)-(b.rank)=1 "
+		+ "and b.date>='2022-01-01' and a.symbol1=b.symbol1 and a.symbol2=b.symbol2 "
 		+ "join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2;";
 
 		
-	    string sql_Update_PairPrices = string("Update PairPrices set profit_loss = ")
+	string sql_Update_PairPrices = string("Update PairPrices set profit_loss = ")
 		+ "(SELECT profit_loss as profit_loss FROM Trade "
 		+ "WHERE PairPrices.symbol1 = Trade.symbol1 "
 		+ "AND PairPrices.symbol2 = Trade.symbol2 AND PairPrices.date = Trade.date);";
 
+	string sql_Drop_Temp_PairPrices = string("Drop table Temp_Pairprices if exists;");
+
 	//	if (ExecuteSQL(db, sql_DropTable_Trade.c_str()) == -1) return -1;
-		if (ExecuteSQL(db, sql_CreateTable_Trade.c_str()) == -1) return -1;
-		cout << "Already created Trade table;" << endl;
-		if (ExecuteSQL(db, sql_Insert_Trade.c_str()) == -1) return -1;
-		cout << "Already insert values into Trade;" << endl;
-		if (ExecuteSQL(db, sql_Update_PairPrices.c_str()) == -1) return -1;
-		cout << "Already update profit_loss of PairPrices;" << endl;
-		return 0;
+	if (ExecuteSQL(db, sql_Temp_PairPrices_Table.c_str()) == -1) return -1;
+	cout << "Already created Temp_PairPrices_Table" << endl;
+	if (ExecuteSQL(db, sql_CreateTable_Trade.c_str()) == -1) return -1;
+	cout << "Already created Trade table;" << endl;
+	if (ExecuteSQL(db, sql_Insert_Trade.c_str()) == -1) return -1;
+	cout << "Already insert values into Trade;" << endl;
+	if (ExecuteSQL(db, sql_Update_PairPrices.c_str()) == -1) return -1;
+	cout << "Already update profit_loss of PairPrices;" << endl;
+
+	//if (DropTable(db, sql_Drop_Temp_PairPrices.c_str()) == -1) return -1;
+	//cout << "Already drop Temp_PairPrices table;" << endl;
+	return 0;
 }
 
 int BackTest2(sqlite3* db, float k);
@@ -292,8 +303,6 @@ int BackTest2(sqlite3* db, float k)
 	stringstream kk;
 	kk << k;
 	string kstr = kk.str();
-
-	//string sql_DropTable_Trade = string("TRUNCATE TABLE Trade;");
 	string sql_CreateTable_Trade = string("CREATE TABLE IF NOT EXISTS Trade ")
 		+ "(symbol1 CHAR(20) NOT NULL, "
 		+ "symbol2 CHAR(20) NOT NULL, "
@@ -301,18 +310,22 @@ int BackTest2(sqlite3* db, float k)
 		+ "profit_loss REAL, "
 		+ "PRIMARY KEY(symbol1, symbol2, date), "
 		+ "FOREIGN KEY(symbol1, symbol2, date) REFERENCES PairPrices(symbol1, symbol2, date) "
-		+ "ON DELETE CASCADE ON UPDATE CASCADE"
+		+ "ON DELETE CASCADE ON UPDATE CASCADE\n"
 		+ ");";
+
+	string sql_Temp_PairPrices_Table = string("Create table if not exists Temp_Pairprices as ")
+		+ "select *, rank()over(partition by symbol1, symbol2 order by date) as rank "
+		+ "from PairPrices WHERE date>='2022-01-01';";
 
 	string sql_Insert_Trade = string("insert into Trade ")
 		+ "select a.symbol1, a.symbol2, a.date as `date`,"
-		+ "case when b.close1/b.close2 - a.open1/a.open2>volatility*" + kstr + " "
-		+ "then - (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
-		+ "when b.close1/b.close2 - a.open1/a.open2<-volatility*" + kstr + " "
+		+ "case when (b.close1/b.close2 - a.open1/a.open2)>volatility*" + kstr + " "
 		+ "then (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
+		+ "when (b.close1/b.close2 - a.open1/a.open2)<-volatility*" + kstr + " "
+		+ "then -(10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
 		+ "else 0 end as profit "
-		+ "from PairPrices a join PairPrices b on julianday(a.date) - julianday(b.date)=1 "
-		+ "and a.date>='2022-01-01' and a.symbol1=b.symbol1 and a.symbol2=b.symbol2 "
+		+ "from Temp_Pairprices a join Temp_Pairprices b on (a.rank)-(b.rank)=1 "
+		+ "and b.date>='2022-01-01' and a.symbol1=b.symbol1 and a.symbol2=b.symbol2 "
 		+ "join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2;";
 
 
@@ -321,7 +334,11 @@ int BackTest2(sqlite3* db, float k)
 		+ "WHERE PairPrices.symbol1 = Trade.symbol1 "
 		+ "AND PairPrices.symbol2 = Trade.symbol2 AND PairPrices.date = Trade.date);";
 
+	string sql_Drop_Temp_PairPrices = string("Drop table Temp_Pairprices if exists;");
+
 	//	if (ExecuteSQL(db, sql_DropTable_Trade.c_str()) == -1) return -1;
+	if (ExecuteSQL(db, sql_Temp_PairPrices_Table.c_str()) == -1) return -1;
+	cout << "Already created Temp_PairPrices_Table" << endl;
 	if (ExecuteSQL(db, sql_CreateTable_Trade.c_str()) == -1) return -1;
 	cout << "Already created Trade table;" << endl;
 	if (ExecuteSQL(db, sql_Insert_Trade.c_str()) == -1) return -1;

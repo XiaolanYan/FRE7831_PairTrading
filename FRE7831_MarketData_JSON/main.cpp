@@ -161,32 +161,39 @@ int BackTest(sqlite3* db, float k)
 	kk << k;
 	string kstr = kk.str();
 
-	string sql_DropTable_Trade = string("drop table Trade if exists;");
-	string sql_CreateTable_Trade = string("create table Trade as")
-		+ "(select a.symbol1, a.symbol2, a.date as `date`,"
-		+ "case when abs(b.close1/b.close2 - a.open1/a.open2)>sigma*" + kstr + " "
+	//string sql_DropTable_Trade = string("TRUNCATE TABLE Trade;");
+	string sql_CreateTable_Trade = string("CREATE TABLE IF NOT EXISTS Trade ")
+		+ "(symbol1 CHAR(20) NOT NULL, "
+		+ "symbol2 CHAR(20) NOT NULL, "
+		+ "date CHAR(20) NOT NULL, "
+		+ "profit_loss REAL NOT NULL, "
+		+ "PRIMARY KEY(symbol1, symbol2, date), "
+		+ "FOREIGN KEY(symbol1, symbol2, date) REFERENCES PairPrices(symbol1, symbol2, date) "
+		+ "ON DELETE CASCADE ON UPDATE CASCADE\n"
+		+ ");";
+
+	    string sql_Insert_Trade = string("insert into Trade ")
+		+ "select a.symbol1, a.symbol2, a.date as `date`,"
+		+ "case when abs(b.close1/b.close2 - a.open1/a.open2)>volatility*" + kstr + " "
 		+ "then - (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
-		+ "when abs(b.close1/b.close2 - a.open1/a.open2)<sigma*" + kstr + " "
+		+ "when abs(b.close1/b.close2 - a.open1/a.open2)<volatility*" + kstr + " "
 		+ "then (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
 		+ "else 0 end as profit "
-		+ "from PairPrices a left join PairPrices b on datediff(a.date,b.date)=1 "
+		+ "from PairPrices a join PairPrices b on julianday(a.date) - julianday(b.date)=1 "
 		+ "and a.date>='2022-01-01' and a.symbol1=b.symbol1 and a.symbol2=b.symbol2 "
-		+ "left join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2);";
+		+ "left join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2;";
 
-		string sql_Add_Primary_Key_ToTrade = string("alter Trade add constraint PK_TRADE_ID primary key(symbol1,symbol2,`date`);");
-	string sql_Add_Foreign_Key_ToTable = string("alter Trade add constraint FK_TRADE_ID foreign key(symbol1,symbol2,`date`) references PairPrices(symbol1,symbol2,`date`);");
-	string sql_Update_PairPrices = string("Update PairPrices set profit_loss = ")
-		+ "(SELECT profit as profit_loss FROM Trade "
+		
+	    string sql_Update_PairPrices = string("Update PairPrices set profit_loss = ")
+		+ "(SELECT profit_loss as profit_loss FROM Trade "
 		+ "WHERE PairPrices.symbol1 = Trade.symbol1 "
 		+ "AND PairPrices.symbol2 = Trade.symbol2 AND PairPrices.date = Trade.date);";
 
-		if (DropTable(db, sql_DropTable_Trade.c_str()) == -1) return -1;
+	//	if (ExecuteSQL(db, sql_DropTable_Trade.c_str()) == -1) return -1;
 		if (ExecuteSQL(db, sql_CreateTable_Trade.c_str()) == -1) return -1;
 		cout << "Already created Trade table;" << endl;
-		if (ExecuteSQL(db, sql_Add_Primary_Key_ToTrade.c_str()) == -1) return -1;
-		cout << "Already add primary key to Trade table;" << endl;
-		if (ExecuteSQL(db, sql_Add_Foreign_Key_ToTable.c_str()) == -1) return -1;
-		cout << "Already add foreign key to Trade table;" << endl;
+		if (ExecuteSQL(db, sql_Insert_Trade.c_str()) == -1) return -1;
+		cout << "Already insert values into Trade;" << endl;
 		if (ExecuteSQL(db, sql_Update_PairPrices.c_str()) == -1) return -1;
 		cout << "Already update profit_loss of PairPrices;" << endl;
 		return 0;
@@ -286,37 +293,55 @@ int BackTest2(sqlite3* db, float k)
 	kk << k;
 	string kstr = kk.str();
 
-	string sql_DropTable_Trade = string("drop table Trade if exists;");
-	string sql_CreateTable_Trade = string("create table Trade as")
-		+ "(select a.symbol1, a.symbol2, a.date as `date`,"
-		+ "case when b.close1/b.close2 - a.open1/a.open2>sigma*" + kstr + " "
+	//string sql_DropTable_Trade = string("TRUNCATE TABLE Trade;");
+	string sql_CreateTable_Trade = string("CREATE TABLE IF NOT EXISTS Trade ")
+		+ "(symbol1 CHAR(20) NOT NULL, "
+		+ "symbol2 CHAR(20) NOT NULL, "
+		+ "date CHAR(20) NOT NULL, "
+		+ "profit_loss REAL NOT NULL, "
+		+ "PRIMARY KEY(symbol1, symbol2, date), "
+		+ "FOREIGN KEY(symbol1, symbol2, date) REFERENCES PairPrices(symbol1, symbol2, date) "
+		+ "ON DELETE CASCADE ON UPDATE CASCADE"
+		+ ");";
+
+	string sql_Insert_Trade = string("insert into Trade ")
+		+ "select a.symbol1, a.symbol2, a.date as `date`,"
+		+ "case when b.close1/b.close2 - a.open1/a.open2>volatility*" + kstr + " "
 		+ "then - (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
-		+ "when b.close1/b.close2 - a.open1/a.open2<-sigma*" + kstr + " "
+		+ "when b.close1/b.close2 - a.open1/a.open2<-volatility*" + kstr + " "
 		+ "then (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
 		+ "else 0 end as profit "
-		+ "from PairPrices a left join PairPrices b on datediff(a.date,b.date)=1 "
+		+ "from PairPrices a left join PairPrices b on julianday(a.date) - julianday(b.date)=1 "
 		+ "and a.date>='2022-01-01' and a.symbol1=b.symbol1 and a.symbol2=b.symbol2 "
-		+ "left join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2);";
+		+ "left join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2;";
 
-		string sql_Add_Primary_Key_ToTrade = string("alter Trade add constraint PK_TRADE_ID primary key(symbol1,symbol2,`date`);");
-	string sql_Add_Foreign_Key_ToTable = string("alter Trade add constraint FK_TRADE_ID foreign key(symbol1,symbol2,`date`) references PairPrices(symbol1,symbol2,`date`);");
+
 	string sql_Update_PairPrices = string("Update PairPrices set profit_loss = ")
-		+ "(SELECT profit as profit_loss FROM Trade "
+		+ "(SELECT profit_loss as profit_loss FROM Trade "
 		+ "WHERE PairPrices.symbol1 = Trade.symbol1 "
 		+ "AND PairPrices.symbol2 = Trade.symbol2 AND PairPrices.date = Trade.date);";
 
-		if (DropTable(db, sql_DropTable_Trade.c_str()) == -1) return -1;
+	//	if (ExecuteSQL(db, sql_DropTable_Trade.c_str()) == -1) return -1;
 	if (ExecuteSQL(db, sql_CreateTable_Trade.c_str()) == -1) return -1;
 	cout << "Already created Trade table;" << endl;
-
-	if (ExecuteSQL(db, sql_Add_Primary_Key_ToTrade.c_str()) == -1) return -1;
-	cout << "Already add primary key to Trade table;" << endl;
-
-	if (ExecuteSQL(db, sql_Add_Foreign_Key_ToTable.c_str()) == -1) return -1;
-	cout << "Already add foreign key to Trade table;" << endl;
-
+	if (ExecuteSQL(db, sql_Insert_Trade.c_str()) == -1) return -1;
+	cout << "Already insert values into Trade;" << endl;
 	if (ExecuteSQL(db, sql_Update_PairPrices.c_str()) == -1) return -1;
 	cout << "Already update profit_loss of PairPrices;" << endl;
-
 	return 0;
 }
+
+
+
+/*
+* insert into Trade
+select a.symbol1, a.symbol2, a.date as `date`,
+case when abs(b.close1/b.close2 - a.open1/a.open2)>volatility*1
+then - (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2))
+when abs(b.close1/b.close2 - a.open1/a.open2)<volatility*1
+then (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2))
+else 0 end as profit
+from PairPrices a left join PairPrices b on julianday(a.date) - julianday(b.date)=1
+and a.date>='2022-01-01' and a.symbol1=b.symbol1 and a.symbol2=b.symbol2
+left join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2
+*/

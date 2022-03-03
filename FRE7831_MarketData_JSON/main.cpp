@@ -228,10 +228,50 @@ int Update_Profitloss(sqlite3* db)
 	return 0;
 }
 
+void Manual_Test(sqlite3* db, float k)
+{
+	char input[100];
+	char symbol1[10], symbol2[10];
+	float open1d2, close1d2, open2d2, close2d2;
+	cout << "Please enter the pair and their prices as the following format: Symbol1,Symbol2,Open1,Close1,Open2,Close2:" << endl;
+	cout << "e.g. AAPL,HPQ,170.1,175.22,41.88,40.23" << endl;
+	scanf("%s", input);
+	sscanf(input, "%[A-Z],%[A-Z],%f,%f,%f,%f\0", symbol1, symbol2, &open1d2, &close1d2, &open2d2, &close2d2);
+
+	char* error = nullptr;
+	char** results = NULL;
+	int rows, columns;
+	char sql_stmt[512];
+	sprintf(sql_stmt, "SELECT volatility FROM StockPairs WHERE StockPairs.symbol1=\"%s\" AND StockPairs.symbol2=\"%s\"", symbol1, symbol2);
+	sqlite3_get_table(db, sql_stmt, &results, &rows, &columns, &error);
+	float volatility = atof(results[1]);
+
+	string last_date_in_db = get_latest_date(db);
+	sprintf(sql_stmt, "SELECT close1,close2 FROM PairPrices WHERE PairPrices.symbol1=\"%s\" AND PairPrices.symbol2=\"%s\" AND PairPrices.date=\"%s\"", symbol1, symbol2, last_date_in_db.c_str());
+	sqlite3_get_table(db, sql_stmt, &results, &rows, &columns, &error);
+	float close1d1 = atof(results[1]);
+	float close2d1 = atof(results[2]);
+
+	int multiplier;
+	string direction;
+	if (abs(close1d1 / close2d1 - open1d2 / open2d2) > k * volatility) {
+		multiplier = -1;
+		direction = "Short";
+	}
+	else {
+		multiplier = 1;
+		direction = "Long";
+	}
+	float N2 = 10000 * open1d2 / open2d2;
+	float profit = multiplier * (10000 * (close1d2 - open1d2) + N2 * (close2d2 - open2d2));
+	printf("%s the pair, and the profit is %.2f\n", direction.c_str(), profit);
+	sqlite3_free_table(results);
+}
+
 
 
 int main() {
-
+	
 	sqlite3* db = NULL;
 	string database_name = "PairTrading.db";
 	string pairtxt = "PairTrading.txt";
@@ -243,6 +283,7 @@ int main() {
 
 
 	while (true) {
+		cout << endl << endl;
 		cout << "-----------menu-------------" << endl;
 		cout << "A - Create and Populate Pair Table" << endl;
 		cout << "B - Retrieve adn Populate Historical Data for Each Stock" << endl;
@@ -250,18 +291,23 @@ int main() {
 		cout << "D - Calculate Volatility" << endl;
 		cout << "E - Back Test" << endl;
 		cout << "F - Calculate Profit and Loss for Each Pair" << endl;
+		cout << "G - Manual Testing" << endl;
+		cout << "H - Drop All the Tables" << endl;
 		cout << "X - Exit" << endl << endl;;
 
 
 		cout << "please enter a valid option:" << endl;
 		cin >> user_option;
-		switch (user_option)
-		{
+		switch (user_option) {
 		case 'A':
+		{
 			if (CreatePairTable(db) != 0) return -1;
 			if (PopulateStockPairs(db, pairtxt, PairOneSymbols, PairTwoSymbols)) return -1;
 			break;
+		}
+			
 		case 'B':
+		{
 			//retrieve data from eodhistorical for the first time or update data
 			//the function would first retrieve the last date in the database and only update data between last_date_in_db and end_date
 			if (PullPairDataToDB(PairOneSymbols, db, true) == -1) return -1;
@@ -269,26 +315,61 @@ int main() {
 			if (PullPairDataToDB(PairTwoSymbols, db, false) == -1) return -1;
 			cout << "successfully populate pair two data" << endl;
 			break;
+		}
+			
 		case 'C':
+		{
 			if (CreatePairPricesTable(db) == -1) return -1;
 			if (PopulatePairPrices(db) == -1) return -1;
 			break;
+		}
+			
 		case 'D':
+		{
 			if (CalculateVolatility(db, back_test_start_date) == -1) return -1;
 			break;
+		}
+			
 		case 'E':
+		{
 			cout << "Please enter K:" << endl;
 			cin >> k;
 			if (BackTest(db, k) == -1) return -1;
 			break;
+		}
+			
 		case 'F':
+		{
 			if (Update_Profitloss(db) == -1) return -1;
 			break;
-		case 'X':
+		}
+			
+		case 'G':
+		{
+			cout << "Please enter K:" << endl;
+			cin >> k;
+			Manual_Test(db, k);
+			break; 
+		}
+
+		case 'H':
+		{
+			//ExecuteSQL(db, "Drop table PairOnePrices if exists;");
+			//ExecuteSQL(db, "Drop table PairTwoPrices if exists;");
+			ExecuteSQL(db, "DROP TABLE IF EXISTS StockPairs;");
+			ExecuteSQL(db, "DROP TABLE IF EXISTS PairPrices;");
+			ExecuteSQL(db, "DROP TABLE IF EXISTS Temp_Pairprices;");
+			ExecuteSQL(db, "DROP TABLE IF EXISTS Trade;");
+			cout << "Table StockPairs, PairPrices, Temp_Pairprices, Trade Dropped" << endl;
+			break;
+		}
+
+		case 'X':			
 			exit(0);
 		}
 
 	}
+	CloseDatabase(db);
 	return 0;
 }
 

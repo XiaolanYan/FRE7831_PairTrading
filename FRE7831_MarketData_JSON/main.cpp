@@ -133,7 +133,7 @@ int PopulatePairPrices(sqlite3* db)
 	return 0;
 }
 
-int CalculateVolatility(sqlite3* db, string back_test_start_date)
+int CalculateVolatility(sqlite3* db, string back_test_start_date, vector<string>& PairOneSymbols)
 {
 	string calculate_volatility_for_pair = string("Update StockPairs SET volatility =")
 		+ "(SELECT(AVG((adjusted_close1/adjusted_close2)*(adjusted_close1/ adjusted_close2)) - AVG(adjusted_close1/adjusted_close2)*AVG(adjusted_close1/adjusted_close2)) as variance "
@@ -150,6 +150,26 @@ int CalculateVolatility(sqlite3* db, string back_test_start_date)
 		+ back_test_start_date + "\');";
 	if (ExecuteSQL(db, calculate_volatility_for_pair.c_str()) == -1)
 		return -1;
+
+	
+	char* error = nullptr;
+	char** results = NULL;
+	int rows, columns;
+	char sql_stmt[512];
+	sprintf(sql_stmt, "SELECT volatility FROM StockPairs;");
+	sqlite3_get_table(db, sql_stmt, &results, &rows, &columns, &error);
+	vector<float> volatility;
+	int n = (int)PairOneSymbols.size();
+	for (int i = 0; i < n; i++)
+	{
+		volatility.push_back(sqrt(atof(results[i+1])));
+	}
+	for (vector<float>::iterator itr = volatility.begin(); itr != volatility.end(); itr++)
+	{
+		cout << *itr << endl;
+	}
+	//Need update stdev in database
+
 	cout << "Successfully calculate volatility for pairs." << endl;
 
 	return 0;
@@ -280,6 +300,8 @@ int main() {
 	char user_option;
 	if (OpenDatabase(database_name.c_str(), db) != 0)	  return -1;
 	float k;
+	map<string, Stock> pair1stocks;
+	map<string, Stock> pair2stocks;
 
 
 	while (true) {
@@ -310,9 +332,9 @@ int main() {
 		{
 			//retrieve data from eodhistorical for the first time or update data
 			//the function would first retrieve the last date in the database and only update data between last_date_in_db and end_date
-			if (PullPairDataToDB(PairOneSymbols, db, true) == -1) return -1;
+			if (PullPairDataToDB(PairOneSymbols, pair1stocks, db, true) == -1) return -1;
 			cout << "successfully populate pair one data" << endl;
-			if (PullPairDataToDB(PairTwoSymbols, db, false) == -1) return -1;
+			if (PullPairDataToDB(PairTwoSymbols, pair2stocks, db, false) == -1) return -1;
 			cout << "successfully populate pair two data" << endl;
 			break;
 		}
@@ -326,7 +348,7 @@ int main() {
 			
 		case 'D':
 		{
-			if (CalculateVolatility(db, back_test_start_date) == -1) return -1;
+			if (CalculateVolatility(db, back_test_start_date,  PairOneSymbols) == -1) return -1;
 			break;
 		}
 			

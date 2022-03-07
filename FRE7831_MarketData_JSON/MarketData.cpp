@@ -109,7 +109,7 @@ string get_latest_date(sqlite3* db) {
 	return max_date;
 }
 
-int PullPairDataToDB(vector<string> symbols, sqlite3* db,bool isPairOne) {
+int PullPairDataToDB(vector<string> symbols, map<string, Stock> &stocks, sqlite3* db,bool isPairOne) {
 
 	string sConfigFile = "config.csv";
 	map<string, string> config_map = ProcessConfigData(sConfigFile);
@@ -146,6 +146,7 @@ int PullPairDataToDB(vector<string> symbols, sqlite3* db,bool isPairOne) {
 				return -1;
 
 		}
+		stocks[symbol] = stock;
 		
 
 	}

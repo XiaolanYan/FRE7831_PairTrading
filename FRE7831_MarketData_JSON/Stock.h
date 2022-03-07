@@ -33,7 +33,7 @@ public:
 		Trade(open_, high_, low_, close_, volume_), date(date_), adjusted_close(adjusted_close_) {}
 	~DailyTrade() {}
 	string GetDate() const { return date; }
-	float GetAdjustedClose() const { return close; }
+	float GetAdjustedClose() const { return adjusted_close; }
 	friend ostream& operator << (ostream& out, const DailyTrade& t)
 	{
 		out << "Date: " << t.date << " Open: " << t.open << " High: " << t.high << " Low: " << t.low

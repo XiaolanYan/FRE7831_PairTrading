@@ -133,7 +133,7 @@ int PopulatePairPrices(sqlite3* db)
 	return 0;
 }
 
-int CalculateVolatility(sqlite3* db, string back_test_start_date, vector<string>& PairOneSymbols)
+int CalculateVolatility(sqlite3* db, string back_test_start_date, vector<string>& PairOneSymbols, vector<string>& PairTwoSymbols)
 {
 	string calculate_volatility_for_pair = string("Update StockPairs SET volatility =")
 		+ "(SELECT(AVG((adjusted_close1/adjusted_close2)*(adjusted_close1/ adjusted_close2)) - AVG(adjusted_close1/adjusted_close2)*AVG(adjusted_close1/adjusted_close2)) as variance "
@@ -164,11 +164,15 @@ int CalculateVolatility(sqlite3* db, string back_test_start_date, vector<string>
 	{
 		volatility.push_back(sqrt(atof(results[i+1])));
 	}
-	for (vector<float>::iterator itr = volatility.begin(); itr != volatility.end(); itr++)
+
+	// Update volatility from variance to standard deviation
+	for (int j = 0; j < n; j++)
 	{
-		cout << *itr << endl;
+		char sql_Insert[512];
+		sprintf(sql_Insert, "INSERT or REPLACE INTO StockPairs(id,symbol1,symbol2,volatility,profit_loss) VALUES(%d, \"%s\",\"%s\", %f, %f)", j+1, PairOneSymbols[j].c_str(), PairTwoSymbols[j].c_str(), volatility[j], 0.0);
+		if (ExecuteSQL(db, sql_Insert) == -1)
+			return -1;
 	}
-	//Need update stdev in database
 
 	cout << "Successfully calculate volatility for pairs." << endl;
 
@@ -348,7 +352,7 @@ int main() {
 			
 		case 'D':
 		{
-			if (CalculateVolatility(db, back_test_start_date,  PairOneSymbols) == -1) return -1;
+			if (CalculateVolatility(db, back_test_start_date,  PairOneSymbols, PairTwoSymbols) == -1) return -1;
 			break;
 		}
 			

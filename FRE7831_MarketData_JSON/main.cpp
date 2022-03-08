@@ -151,7 +151,7 @@ int CalculateVolatility(sqlite3* db, string back_test_start_date, vector<string>
 	if (ExecuteSQL(db, calculate_volatility_for_pair.c_str()) == -1)
 		return -1;
 
-	
+
 	char* error = nullptr;
 	char** results = NULL;
 	int rows, columns;
@@ -162,18 +162,18 @@ int CalculateVolatility(sqlite3* db, string back_test_start_date, vector<string>
 	int n = (int)PairOneSymbols.size();
 	for (int i = 0; i < n; i++)
 	{
-		volatility.push_back(sqrt(atof(results[i+1])));
+		volatility.push_back(sqrt(atof(results[i + 1])));
 	}
 
 	// Update volatility from variance to standard deviation
-	for (int j = 0; j < n; j++)
+	/*for (int j = 0; j < n; j++)
 	{
 		char sql_Insert[512];
-		sprintf(sql_Insert, "INSERT or REPLACE INTO StockPairs(id,symbol1,symbol2,volatility,profit_loss) VALUES(%d, \"%s\",\"%s\", %f, %f)", j+1, PairOneSymbols[j].c_str(), PairTwoSymbols[j].c_str(), volatility[j], 0.0);
+		sprintf(sql_Insert, "INSERT or REPLACE INTO StockPairs(id,symbol1,symbol2,volatility,profit_loss) VALUES(%d, \"%s\",\"%s\", %f, %f)", j + 1, PairOneSymbols[j].c_str(), PairTwoSymbols[j].c_str(), volatility[j], 0.0);
 		if (ExecuteSQL(db, sql_Insert) == -1)
 			return -1;
 	}
-
+*/
 	cout << "Successfully calculate volatility for pairs." << endl;
 
 	return 0;
@@ -181,6 +181,7 @@ int CalculateVolatility(sqlite3* db, string back_test_start_date, vector<string>
 
 int BackTest(sqlite3* db, float k)
 {
+	k = k * k;
 	stringstream kk;
 	kk << k;
 	string kstr = kk.str();
@@ -202,16 +203,16 @@ int BackTest(sqlite3* db, float k)
 
 	string sql_Insert_Trade = string("insert into Trade ")
 		+ "select a.symbol1, a.symbol2, a.date as `date`,"
-		+ "case when abs(b.close1/b.close2 - a.open1/a.open2)>volatility*" + kstr + " "
+		+ "case when abs(b.close1/b.close2 - a.open1/a.open2)>volatility/abs(b.close1/b.close2 - a.open1/a.open2)*" + kstr + " "
 		+ "then (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
-		+ "when abs(b.close1/b.close2 - a.open1/a.open2)<volatility*" + kstr + " "
+		+ "when abs(b.close1/b.close2 - a.open1/a.open2)<volatility/abs(b.close1/b.close2 - a.open1/a.open2)*" + kstr + " "
 		+ "then -(10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2)) "
 		+ "else 0 end as profit "
 		+ "from Temp_Pairprices a join Temp_Pairprices b on (a.rank)-(b.rank)=1 "
 		+ "and b.date>='2022-01-01' and a.symbol1=b.symbol1 and a.symbol2=b.symbol2 "
 		+ "join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2;";
 
-		
+
 	string sql_Update_PairPrices = string("Update PairPrices set profit_loss = ")
 		+ "(SELECT profit_loss as profit_loss FROM Trade "
 		+ "WHERE PairPrices.symbol1 = Trade.symbol1 "
@@ -295,7 +296,7 @@ void Manual_Test(sqlite3* db, float k)
 
 
 int main() {
-	
+
 	sqlite3* db = NULL;
 	string database_name = "PairTrading.db";
 	string pairtxt = "PairTrading.txt";
@@ -331,7 +332,7 @@ int main() {
 			if (PopulateStockPairs(db, pairtxt, PairOneSymbols, PairTwoSymbols)) return -1;
 			break;
 		}
-			
+
 		case 'B':
 		{
 			//retrieve data from eodhistorical for the first time or update data
@@ -342,20 +343,20 @@ int main() {
 			cout << "successfully populate pair two data" << endl;
 			break;
 		}
-			
+
 		case 'C':
 		{
 			if (CreatePairPricesTable(db) == -1) return -1;
 			if (PopulatePairPrices(db) == -1) return -1;
 			break;
 		}
-			
+
 		case 'D':
 		{
-			if (CalculateVolatility(db, back_test_start_date,  PairOneSymbols, PairTwoSymbols) == -1) return -1;
+			if (CalculateVolatility(db, back_test_start_date, PairOneSymbols, PairTwoSymbols) == -1) return -1;
 			break;
 		}
-			
+
 		case 'E':
 		{
 			cout << "Please enter K:" << endl;
@@ -363,19 +364,19 @@ int main() {
 			if (BackTest(db, k) == -1) return -1;
 			break;
 		}
-			
+
 		case 'F':
 		{
 			if (Update_Profitloss(db) == -1) return -1;
 			break;
 		}
-			
+
 		case 'G':
 		{
 			cout << "Please enter K:" << endl;
 			cin >> k;
 			Manual_Test(db, k);
-			break; 
+			break;
 		}
 
 		case 'H':
@@ -390,7 +391,7 @@ int main() {
 			break;
 		}
 
-		case 'X':			
+		case 'X':
 			exit(0);
 		}
 
@@ -456,6 +457,19 @@ int BackTest2(sqlite3* db, float k)
 }
 
 
+
+/*
+* insert into Trade
+select a.symbol1, a.symbol2, a.date as `date`,
+case when abs(b.close1/b.close2 - a.open1/a.open2)>volatility*1
+then - (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2))
+when abs(b.close1/b.close2 - a.open1/a.open2)<volatility*1
+then (10000*(a.open1 - a.close1) - 10000*a.open1/a.open2*(a.open2 - a.close2))
+else 0 end as profit
+from PairPrices a left join PairPrices b on julianday(a.date) - julianday(b.date)=1
+and a.date>='2022-01-01' and a.symbol1=b.symbol1 and a.symbol2=b.symbol2
+left join StockPairs c on a.symbol1=c.symbol1 and a.symbol2=c.symbol2
+*/
 
 /*
 * insert into Trade

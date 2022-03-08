@@ -248,6 +248,10 @@ int Update_Profitloss(sqlite3* db)
 		;
 
 	if (ExecuteSQL(db, sql_Update_StockPairs.c_str()) == -1) return -1;
+
+	sql_Update_StockPairs = string("UPDATE PairPrices SET profit_loss = ifnull(profit_loss, 0.0);");
+	if (ExecuteSQL(db, sql_Update_StockPairs.c_str()) == -1) return -1;
+
 	cout << "Already update profit_loss of StockPairs;" << endl;
 
 	return 0;
